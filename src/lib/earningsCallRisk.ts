@@ -7,6 +7,10 @@ export type EvidenceExcerpt = {
   content: string
 }
 
+export type HealthStatus = {
+  status: string
+}
+
 export type RiskFactorResult = {
   factor: string
   probability: number
@@ -28,6 +32,16 @@ export type EarningsCallRiskResponse = {
 export type EarningsCallRiskRequest = {
   symbol: string
   quarter: string
+}
+
+export async function getHealthStatus(): Promise<HealthStatus> {
+  const response = await fetch('/api/healthz')
+
+  if (!response.ok) {
+    throw new Error('API health check failed')
+  }
+
+  return (await response.json()) as HealthStatus
 }
 
 export async function getEarningsCallRisk(

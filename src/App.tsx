@@ -9,11 +9,58 @@ import {
 import { useEffect, useState } from 'react'
 import type { FormEvent } from 'react'
 
-import { getEarningsCallRisk, type EarningsCallRiskResponse } from './lib/earningsCallRisk'
+import {
+  getEarningsCallRisk,
+  getHealthStatus,
+  type EarningsCallRiskResponse,
+} from './lib/earningsCallRisk'
 
-const defaultForm = {
-  symbol: 'IBM',
-  quarter: '2024Q1',
+export const symbolOptions = ['AAPL', 'AMZN', 'GOOGL', 'IBM', 'META', 'MSFT', 'NVDA']
+
+export function getLatestCompletedQuarter(referenceDate = new Date()): string {
+  const year = referenceDate.getUTCFullYear()
+  const currentQuarter = Math.floor(referenceDate.getUTCMonth() / 3) + 1
+  let quarter = currentQuarter
+  const quarterEndMonth = quarter * 3 - 1
+  const quarterEndDay = new Date(Date.UTC(year, quarterEndMonth + 1, 0)).getUTCDate()
+  const isQuarterComplete = referenceDate.getUTCDate() >= quarterEndDay
+
+  if (!isQuarterComplete) {
+    quarter -= 1
+  }
+
+  if (quarter === 0) {
+    return `${year - 1}Q4`
+  }
+
+  return `${year}Q${quarter}`
+}
+
+export function getQuarterOptions(referenceDate = new Date()): string[] {
+  const latestQuarter = getLatestCompletedQuarter(referenceDate)
+  const [yearText, quarterText] = latestQuarter.split('Q')
+  let year = Number(yearText)
+  let quarter = Number(quarterText)
+
+  return Array.from({ length: 12 }, () => {
+    const current = `${year}Q${quarter}`
+
+    if (quarter === 1) {
+      year -= 1
+      quarter = 4
+    } else {
+      quarter -= 1
+    }
+
+    return current
+  })
+}
+
+function createDefaultForm() {
+  return {
+    symbol: 'IBM',
+    quarter: getLatestCompletedQuarter(),
+  }
 }
 
 type Theme = 'light' | 'dark'
@@ -31,14 +78,37 @@ function getInitialTheme(): Theme {
 
 function App() {
   const [theme, setTheme] = useState<Theme>(getInitialTheme)
-  const [form, setForm] = useState(defaultForm)
+  const [form, setForm] = useState(createDefaultForm)
   const [result, setResult] = useState<EarningsCallRiskResponse | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(false)
+  const [apiHealth, setApiHealth] = useState<'checking' | 'ok' | 'error'>('checking')
 
   useEffect(() => {
     document.documentElement.classList.toggle('dark', theme === 'dark')
   }, [theme])
+
+  useEffect(() => {
+    let isMounted = true
+
+    async function checkHealth() {
+      try {
+        const response = await getHealthStatus()
+        if (isMounted) {
+          setApiHealth(response.status === 'ok' ? 'ok' : 'error')
+        }
+      } catch {
+        if (isMounted) {
+          setApiHealth('error')
+        }
+      }
+    }
+
+    void checkHealth()
+    return () => {
+      isMounted = false
+    }
+  }, [])
 
   function toggleTheme() {
     setTheme((current) => {
@@ -134,31 +204,66 @@ function App() {
               </h2>
             </div>
 
+            <div
+              aria-live="polite"
+              className="mb-4 flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-medium text-slate-600 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-300"
+            >
+              <span
+                className={[
+                  'size-2.5 rounded-full',
+                  apiHealth === 'ok'
+                    ? 'bg-emerald-500'
+                    : apiHealth === 'checking'
+                      ? 'bg-amber-400'
+                      : 'bg-red-500',
+                ].join(' ')}
+              />
+              {apiHealth === 'ok'
+                ? 'API healthy'
+                : apiHealth === 'checking'
+                  ? 'Checking API health...'
+                  : 'API unavailable'}
+            </div>
+
             <form onSubmit={handleSubmit} className="grid gap-4">
               <label className="grid gap-2 text-sm font-medium text-slate-700 dark:text-slate-300">
                 Symbol
-                <input
+                <select
                   value={form.symbol}
-                  onChange={(event) => setForm((current) => ({ ...current, symbol: event.target.value }))}
-                  placeholder="IBM"
-                  className="h-11 rounded-lg border border-slate-300 bg-white px-3.5 text-sm text-slate-950 outline-none transition placeholder:text-slate-400 focus:border-emerald-500 focus:ring-3 focus:ring-emerald-500/15 dark:border-slate-700 dark:bg-slate-950 dark:text-white"
-                />
+                  onChange={(event) =>
+                    setForm((current) => ({ ...current, symbol: event.target.value }))
+                  }
+                  className="h-11 rounded-lg border border-slate-300 bg-white px-3.5 text-sm text-slate-950 outline-none transition focus:border-emerald-500 focus:ring-3 focus:ring-emerald-500/15 dark:border-slate-700 dark:bg-slate-950 dark:text-white"
+                >
+                  {symbolOptions.map((symbol) => (
+                    <option key={symbol} value={symbol}>
+                      {symbol}
+                    </option>
+                  ))}
+                </select>
               </label>
 
               <label className="grid gap-2 text-sm font-medium text-slate-700 dark:text-slate-300">
                 Quarter
-                <input
+                <select
                   value={form.quarter}
-                  onChange={(event) => setForm((current) => ({ ...current, quarter: event.target.value }))}
-                  placeholder="2024Q1"
-                  className="h-11 rounded-lg border border-slate-300 bg-white px-3.5 text-sm text-slate-950 outline-none transition placeholder:text-slate-400 focus:border-emerald-500 focus:ring-3 focus:ring-emerald-500/15 dark:border-slate-700 dark:bg-slate-950 dark:text-white"
-                />
+                  onChange={(event) =>
+                    setForm((current) => ({ ...current, quarter: event.target.value }))
+                  }
+                  className="h-11 rounded-lg border border-slate-300 bg-white px-3.5 text-sm text-slate-950 outline-none transition focus:border-emerald-500 focus:ring-3 focus:ring-emerald-500/15 dark:border-slate-700 dark:bg-slate-950 dark:text-white"
+                >
+                  {getQuarterOptions().map((quarter) => (
+                    <option key={quarter} value={quarter}>
+                      {quarter}
+                    </option>
+                  ))}
+                </select>
               </label>
 
               <button
                 type="submit"
-                disabled={isLoading}
-                className="mt-1 inline-flex h-11 items-center justify-center gap-2 rounded-lg bg-emerald-500 px-4 text-sm font-semibold text-slate-950 transition hover:bg-emerald-400 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-500 disabled:cursor-wait disabled:opacity-65"
+                disabled={isLoading || apiHealth !== 'ok'}
+                className="mt-1 inline-flex h-11 items-center justify-center gap-2 rounded-lg bg-emerald-500 px-4 text-sm font-semibold text-slate-950 transition hover:bg-emerald-400 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-500 disabled:cursor-not-allowed disabled:opacity-65"
               >
                 {isLoading ? 'Analyzing…' : 'Run analysis'}
                 {!isLoading ? <ArrowUpRight aria-hidden="true" className="size-4" /> : null}

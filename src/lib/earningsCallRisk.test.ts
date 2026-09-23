@@ -1,8 +1,12 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { getEarningsCallRisk } from './earningsCallRisk.ts'
+import { getEarningsCallRisk, getHealthStatus } from './earningsCallRisk.ts'
 
 describe('getEarningsCallRisk', () => {
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
   it('posts to the local Vite proxy and returns the typed API response', async () => {
     const originalFetch = globalThis.fetch
 
@@ -46,5 +50,22 @@ describe('getEarningsCallRisk', () => {
     } finally {
       globalThis.fetch = originalFetch
     }
+  })
+
+  it('gets the local API health status through the proxy', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        new Response(JSON.stringify({ status: 'ok' }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        }),
+      ),
+    )
+
+    const result = await getHealthStatus()
+
+    expect(globalThis.fetch).toHaveBeenCalledWith('/api/healthz')
+    expect(result).toEqual({ status: 'ok' })
   })
 })
