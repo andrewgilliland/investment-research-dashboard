@@ -1,5 +1,4 @@
-import assert from 'node:assert/strict'
-import { describe, it } from 'node:test'
+import { describe, expect, it } from 'vitest'
 
 import { getEarningsCallRisk } from './earningsCallRisk.ts'
 
@@ -8,12 +7,15 @@ describe('getEarningsCallRisk', () => {
     const originalFetch = globalThis.fetch
 
     globalThis.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
-      assert.equal(input, '/api/v1/earnings-call-risk')
-      assert.equal(init?.method, 'POST')
-      assert.equal(init?.headers && (init.headers as Record<string, string>)['Content-Type'], 'application/json')
+      expect(input).toBe('/api/v1/earnings-call-risk')
+      expect(init?.method).toBe('POST')
+      expect(
+        init?.headers &&
+          (init.headers as Record<string, string>)['Content-Type'],
+      ).toBe('application/json')
 
       const body = JSON.parse(String(init?.body ?? '{}'))
-      assert.deepEqual(body, { symbol: 'IBM', quarter: '2024Q1' })
+      expect(body).toEqual({ symbol: 'IBM', quarter: '2024Q1' })
 
       return new Response(
         JSON.stringify({
@@ -39,8 +41,8 @@ describe('getEarningsCallRisk', () => {
 
     try {
       const result = await getEarningsCallRisk({ symbol: 'IBM', quarter: '2024Q1' })
-      assert.equal(result.risk_band, 'high')
-      assert.equal(result.factors[0]?.factor, 'management_evasiveness')
+      expect(result.risk_band).toBe('high')
+      expect(result.factors[0]?.factor).toBe('management_evasiveness')
     } finally {
       globalThis.fetch = originalFetch
     }
